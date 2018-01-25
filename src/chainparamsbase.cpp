@@ -91,6 +91,10 @@ std::string ChainNameFromCommandLine()
 {
     bool fRegTest = gArgs.GetBoolArg("-regtest", false);
     bool fTestNet = gArgs.GetBoolArg("-testnet", false);
+    bool fMainNet = gArgs.GetBoolArg("-enablemainnet", false);
+#ifdef ENABLE_MAINNET
+    fMainNet = true;
+#endif
 
     if (fTestNet && fRegTest)
         throw std::runtime_error("Invalid combination of -regtest and -testnet.");
@@ -98,5 +102,8 @@ std::string ChainNameFromCommandLine()
         return CBaseChainParams::REGTEST;
     if (fTestNet)
         return CBaseChainParams::TESTNET;
-    return CBaseChainParams::MAIN;
+    if (fMainNet)
+        return CBaseChainParams::MAIN;
+    else
+        return CBaseChainParams::TESTNET;
 }

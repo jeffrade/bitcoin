@@ -96,6 +96,13 @@ AC_PATH_TOOL(OBJCOPY, objcopy)
 
 AC_ARG_VAR(PYTHONPATH, Augments the default search path for python module files)
 
+# Enable mainnet chain
+AC_ARG_ENABLE([mainnet],
+  [AS_HELP_STRING([--enable-mainnet],
+  [if mainnet is enabled, binary will use mainnet chain by default (default is no, binary will use testnet)])],
+  [use_mainnet_default=$enableval],
+  [use_mainnet_default=no])
+
 # Enable wallet
 AC_ARG_ENABLE([wallet],
   [AS_HELP_STRING([--disable-wallet],
@@ -1094,6 +1101,15 @@ if test "x$use_ccache" = "xyes"; then
     AX_CHECK_PREPROC_FLAG([-Qunused-arguments],[CPPFLAGS="-Qunused-arguments $CPPFLAGS"])
 fi
 
+dnl enable mainnet
+AC_MSG_CHECKING([if mainnet should be enabled by default])
+if test x$use_mainnet_default = xyes; then
+  AC_MSG_RESULT(yes)
+  AC_DEFINE_UNQUOTED([ENABLE_MAINNET],[1],[Define to 1 to enable mainnet chain by default])
+else
+  AC_MSG_RESULT(no)
+fi
+
 dnl enable wallet
 AC_MSG_CHECKING([if wallet should be enabled])
 if test x$enable_wallet != xno; then
@@ -1196,6 +1212,7 @@ fi
 AM_CONDITIONAL([TARGET_DARWIN], [test x$TARGET_OS = xdarwin])
 AM_CONDITIONAL([BUILD_DARWIN], [test x$BUILD_OS = xdarwin])
 AM_CONDITIONAL([TARGET_WINDOWS], [test x$TARGET_OS = xwindows])
+AM_CONDITIONAL([ENABLE_MAINNET],[test x$use_mainnet_default = xyes])
 AM_CONDITIONAL([ENABLE_WALLET],[test x$enable_wallet = xyes])
 AM_CONDITIONAL([ENABLE_TESTS],[test x$BUILD_TEST = xyes])
 AM_CONDITIONAL([ENABLE_QT],[test x$bitcoin_enable_qt = xyes])
@@ -1315,6 +1332,7 @@ esac
 
 echo
 echo "Options used to compile and link:"
+echo "  use mainnet   = $use_mainnet_default"
 echo "  with wallet   = $enable_wallet"
 echo "  with gui / qt = $bitcoin_enable_qt"
 if test x$bitcoin_enable_qt != xno; then
