@@ -52,6 +52,8 @@ if os.name == 'posix':
 TEST_EXIT_PASSED = 0
 TEST_EXIT_SKIPPED = 77
 
+TRAVIS_TIMEOUT_DURATION = 1200 # 20 minutes represented in seconds
+
 BASE_SCRIPTS= [
     # Scripts that are run by the travis build process.
     # Longest test should go first, to favor running tests in parallel
@@ -242,14 +244,12 @@ def main():
                 test_list.append(t)
             else:
                 print("{}WARNING!{} Test '{}' not found in full test list.".format(BOLD[1], BOLD[0], t))
+    elif args.extended:
+        # Include extended tests
+        test_list = ALL_SCRIPTS
     else:
-        # No individual tests have been specified.
-        # Run all base tests, and optionally run extended tests.
+        # Run base tests only
         test_list = BASE_SCRIPTS
-        if args.extended:
-            # place the EXTENDED_SCRIPTS first since the three longest ones
-            # are there and the list is shorter
-            test_list = EXTENDED_SCRIPTS + test_list
 
     # Remove the test cases that the user has explicitly asked to exclude.
     if args.exclude:
@@ -319,7 +319,7 @@ def run_tests(test_list, src_dir, build_dir, exeext, tmpdir, jobs=1, enable_cove
 
     #Run Tests
     job_queue = TestHandler(jobs, tests_dir, tmpdir, test_list, flags)
-    time0 = time.time()
+    start_time = time.time()
     test_results = []
 
     max_len_name = len(max(test_list, key=len))
@@ -345,7 +345,7 @@ def run_tests(test_list, src_dir, build_dir, exeext, tmpdir, jobs=1, enable_cove
                 combined_logs, _ = subprocess.Popen([os.path.join(tests_dir, 'combine_logs.py'), '-c', testdir], universal_newlines=True, stdout=subprocess.PIPE).communicate()
                 print("\n".join(deque(combined_logs.splitlines(), combined_logs_len)))
 
-    print_results(test_results, max_len_name, (int(time.time() - time0)))
+    print_results(test_results, max_len_name, (int(time.time() - start_time)))
 
     if coverage:
         coverage.report_rpc_coverage()
@@ -402,15 +402,15 @@ class TestHandler:
         while self.num_running < self.num_jobs and self.test_list:
             # Add tests
             self.num_running += 1
-            t = self.test_list.pop(0)
+            test = self.test_list.pop(0)
             portseed = len(self.test_list) + self.portseed_offset
             portseed_arg = ["--portseed={}".format(portseed)]
             log_stdout = tempfile.SpooledTemporaryFile(max_size=2**16)
             log_stderr = tempfile.SpooledTemporaryFile(max_size=2**16)
-            test_argv = t.split()
+            test_argv = test.split()
             testdir = "{}/{}_{}".format(self.tmpdir, re.sub(".py$", "", test_argv[0]), portseed)
             tmpdir_arg = ["--tmpdir={}".format(testdir)]
-            self.jobs.append((t,
+            self.jobs.append((test,
                               time.time(),
                               subprocess.Popen([self.tests_dir + test_argv[0]] + test_argv[1:] + self.flags + portseed_arg + tmpdir_arg,
                                                universal_newlines=True,
@@ -425,10 +425,9 @@ class TestHandler:
             # Return first proc that finishes
             time.sleep(.5)
             for j in self.jobs:
-                (name, time0, proc, testdir, log_out, log_err) = j
-                if os.getenv('TRAVIS') == 'true' and int(time.time() - time0) > 20 * 60:
-                    # In travis, timeout individual tests after 20 minutes (to stop tests hanging and not
-                    # providing useful output.
+                (name, start_time, proc, testdir, log_out, log_err) = j
+                if os.getenv('TRAVIS') == 'true' and int(time.time() - start_time) > TRAVIS_TIMEOUT_DURATION:
+                    # In travis, timeout individual tests (to stop tests hanging and not providing useful output).
                     proc.send_signal(signal.SIGINT)
                 if proc.poll() is not None:
                     log_out.seek(0), log_err.seek(0)
@@ -443,7 +442,7 @@ class TestHandler:
                     self.num_running -= 1
                     self.jobs.remove(j)
 
-                    return TestResult(name, status, int(time.time() - time0)), testdir, stdout, stderr
+                    return TestResult(name, status, int(time.time() - start_time)), testdir, stdout, stderr
             print('.', end='', flush=True)
 
 class TestResult():
